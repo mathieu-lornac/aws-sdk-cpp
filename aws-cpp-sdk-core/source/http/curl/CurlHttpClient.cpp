@@ -124,11 +124,8 @@ std::shared_ptr<HttpResponse> CurlHttpClient::MakeRequest(HttpRequest& request, 
 {
     //handle uri encoding at last second. Otherwise, the signer and the http layer will mismatch.
     URI uri = request.GetUri();
-    //TODO
     uri.SetPath(URI::URLEncodePath(uri.GetPath()));
     Aws::String url = uri.GetURIString();
-    std::cout << "Current url" << url << std::endl ;
-    url = "http://testbucket_42.storage.googleapis.com/sca.png";
     std::cout << "[CURL] Making request to " << url << std::endl;
     struct curl_slist* headers = NULL;
 
@@ -146,14 +143,8 @@ std::shared_ptr<HttpResponse> CurlHttpClient::MakeRequest(HttpRequest& request, 
 	if (requestHeader.first == "user-agent")
 	  continue;
         headerStream.str("");
-	if (requestHeader.first == "host") {
-	  headerStream << "host: testbucket_42.storage.googleapis.com";
-	  std::cout << "[CURL] [header] " << "host: testbucket_42.storage.googleapis.com" << std::endl;
-	}
-	else {
 	  headerStream << requestHeader.first << ": " << requestHeader.second;
 	  std::cout << "[CURL] [header] " << requestHeader.first << ": " << requestHeader.second << std::endl;
-	}
         Aws::String headerString = headerStream.str();
         AWS_LOGSTREAM_TRACE(CurlTag, headerString);
         headers = curl_slist_append(headers, headerString.c_str());
