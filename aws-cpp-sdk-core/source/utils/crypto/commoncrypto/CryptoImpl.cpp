@@ -99,6 +99,7 @@ HashResult Sha256CommonCryptoImpl::Calculate(Aws::IStream& stream)
 
 HashResult Sha256HMACCommonCryptoImpl::Calculate(const ByteBuffer& toSign, const ByteBuffer& secret)
 {
+  std::cout << "### Sha256HMACCommonCryptoImpl::Calculate" << std::endl; 
     unsigned int length = CC_SHA256_DIGEST_LENGTH;
     ByteBuffer digest(length);
     std::memset(digest.GetUnderlyingData(), 0, length);

@@ -23,7 +23,7 @@
 #include <aws/core/utils/ratelimiter/RateLimiterInterface.h>
 #include <cassert>
 #include <algorithm>
-
+#include <iostream>
 
 using namespace Aws::Client;
 using namespace Aws::Http;
@@ -124,10 +124,12 @@ std::shared_ptr<HttpResponse> CurlHttpClient::MakeRequest(HttpRequest& request, 
 {
     //handle uri encoding at last second. Otherwise, the signer and the http layer will mismatch.
     URI uri = request.GetUri();
+    //TODO
     uri.SetPath(URI::URLEncodePath(uri.GetPath()));
     Aws::String url = uri.GetURIString();
-
-    AWS_LOGSTREAM_TRACE(CurlTag, "Making request to " << url);
+    std::cout << "Current url" << url << std::endl ;
+    url = "http://testbucket_42.storage.googleapis.com/sca.png";
+    std::cout << "[CURL] Making request to " << url << std::endl;
     struct curl_slist* headers = NULL;
 
     if (writeLimiter != nullptr)
@@ -138,26 +140,35 @@ std::shared_ptr<HttpResponse> CurlHttpClient::MakeRequest(HttpRequest& request, 
     Aws::StringStream headerStream;
     HeaderValueCollection requestHeaders = request.GetHeaders();
 
-    AWS_LOG_TRACE(CurlTag, "Including headers:");
+    std::cout << "[CURL] Including headers:" << std::endl;
     for (auto& requestHeader : requestHeaders)
     {
+	if (requestHeader.first == "user-agent")
+	  continue;
         headerStream.str("");
-        headerStream << requestHeader.first << ": " << requestHeader.second;
+	if (requestHeader.first == "host") {
+	  headerStream << "host: testbucket_42.storage.googleapis.com";
+	  std::cout << "[CURL] [header] " << "host: testbucket_42.storage.googleapis.com" << std::endl;
+	}
+	else {
+	  headerStream << requestHeader.first << ": " << requestHeader.second;
+	  std::cout << "[CURL] [header] " << requestHeader.first << ": " << requestHeader.second << std::endl;
+	}
         Aws::String headerString = headerStream.str();
         AWS_LOGSTREAM_TRACE(CurlTag, headerString);
         headers = curl_slist_append(headers, headerString.c_str());
     }
-    headers = curl_slist_append(headers, "transfer-encoding:");
+    //headers = curl_slist_append(headers, "transfer-encoding:");
 
-    if (!request.HasHeader(Http::CONTENT_LENGTH_HEADER))
-    {
-        headers = curl_slist_append(headers, "content-length:");
-    }
+    // if (!request.HasHeader(Http::CONTENT_LENGTH_HEADER))
+    // {
+    //     headers = curl_slist_append(headers, "content-length:");
+    // }
 
-    if (!request.HasHeader(Http::CONTENT_TYPE_HEADER))
-    {
-        headers = curl_slist_append(headers, "content-type:");
-    }
+    // if (!request.HasHeader(Http::CONTENT_TYPE_HEADER))
+    // {
+    //     headers = curl_slist_append(headers, "content-type:");
+    // }
 
     std::shared_ptr<HttpResponse> response(nullptr);
     CURL* connectionHandle = m_curlHandleContainer.AcquireCurlHandle();
@@ -219,7 +230,7 @@ std::shared_ptr<HttpResponse> CurlHttpClient::MakeRequest(HttpRequest& request, 
         {
             curl_easy_setopt(connectionHandle, CURLOPT_FOLLOWLOCATION, 0L);
         }
-        //curl_easy_setopt(connectionHandle, CURLOPT_VERBOSE, 1);
+        curl_easy_setopt(connectionHandle, CURLOPT_VERBOSE, 1);
 
         if (m_isUsingProxy)
         {
@@ -258,20 +269,24 @@ std::shared_ptr<HttpResponse> CurlHttpClient::MakeRequest(HttpRequest& request, 
 
             AWS_LOGSTREAM_DEBUG(CurlTag, "Releasing curl handle " << connectionHandle);
         }
-
         m_curlHandleContainer.ReleaseCurlHandle(connectionHandle);
         //go ahead and flush the response body stream
         if(response)
         {
             response->GetResponseBody().flush();
         }
+	// std::stringstream ss;
+	// ss << response->GetResponseBody().rdbuf();
+	// std::string myString = ss.str();
+	// std::cout << "[Curl] Response: " << myString << std::endl;
+
     }
 
     if (headers)
     {
         curl_slist_free_all(headers);
     }
-
+    
     return response;
 }
 

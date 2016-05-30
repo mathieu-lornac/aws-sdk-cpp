@@ -26,12 +26,18 @@
 #include <aws/core/utils/logging/LogMacros.h>
 #include <aws/core/utils/memory/AWSMemory.h>
 #include <aws/core/utils/crypto/Sha256.h>
+#include <aws/core/utils/crypto/MD5.h>
 #include <aws/core/utils/crypto/Sha256HMAC.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <iomanip>
 #include <math.h>
 #include <string.h>
+
+// TO REMOVE
+
+#include <vector>
 
 using namespace Aws;
 using namespace Aws::Client;
@@ -40,27 +46,25 @@ using namespace Aws::Http;
 using namespace Aws::Utils;
 using namespace Aws::Utils::Logging;
 
-static const char* EQ = "=";
-static const char* SIGNATURE = "Signature";
-static const char* AWS_HMAC_SHA256 = "AWS4-HMAC-SHA256";
+static const char* AWS_HMAC_SHA256 = "AWS";
 static const char* AWS4_REQUEST = "aws4_request";
-static const char* SIGNED_HEADERS = "SignedHeaders";
-static const char* CREDENTIAL = "Credential";
 static const char* NEWLINE = "\n";
 static const char* X_AMZ_SIGNED_HEADERS = "X-Amz-SignedHeaders";
 static const char* X_AMZ_ALGORITHM = "X-Amz-Algorithm";
 static const char* X_AMZ_CREDENTIAL = "X-Amz-Credential";
 static const char* UNSIGNED_PAYLOAD = "UNSIGNED-PAYLOAD";
 static const char* X_AMZ_SIGNATURE = "X-Amz-Signature";
-static const char* SIGNING_KEY = "AWS4";
-static const char* LONG_DATE_FORMAT_STR = "%Y%m%dT%H%M%SZ";
+static const char* LONG_DATE_FORMAT_STR = "%a, %d %b %Y %H:%M:%S GMT";
+
 static const char* SIMPLE_DATE_FORMAT_STR = "%Y%m%d";
 
 static const char* v4LogTag = "AWSAuthV4Signer";
 
 Aws::String CanonicalizeRequestSigningString(HttpRequest& request)
 {
+  std::cout << "##### SHOULD NOT BE EXEX CanonicalizeRequestSigningString" << std::endl;
     request.CanonicalizeRequest();
+
     Aws::StringStream signingStringStream;
     signingStringStream << HttpMethodMapper::GetNameForHttpMethod(request.GetMethod());
 
@@ -89,6 +93,7 @@ AWSAuthV4Signer::AWSAuthV4Signer(const std::shared_ptr<Auth::AWSCredentialsProvi
     m_serviceName(serviceName),
     m_region(region),
     m_hash(Aws::MakeUnique<Aws::Utils::Crypto::Sha256>(v4LogTag)),
+    m_hashMD5(Aws::MakeUnique<Aws::Utils::Crypto::MD5>(v4LogTag)),
     m_HMAC(Aws::MakeUnique<Aws::Utils::Crypto::Sha256HMAC>(v4LogTag))
 {
 }
@@ -114,75 +119,91 @@ bool AWSAuthV4Signer::SignRequest(Aws::Http::HttpRequest& request) const
     }
 
     //calculate date header to use in internal signature (this also goes into date header).
+    // TODO change format
     Aws::String dateHeaderValue = DateTime::CalculateGmtTimestampAsString(LONG_DATE_FORMAT_STR);
-    request.SetHeaderValue(AWS_DATE_HEADER, dateHeaderValue);
-
+    request.SetHeaderValue("Date", dateHeaderValue);
+    //    request.SetHeaderValue("x-amz-date", dateHeaderValue);
+    // Md5 of the payload
     Aws::String payloadHash(ComputePayloadHash(request));
     if (payloadHash.empty())
     {
         return false;
     }
 
-    request.SetHeaderValue("x-amz-content-sha256", payloadHash);
-
+    request.SetHeaderValue("Content-type", "plain/text");
+    std::cout << "PLHash: " << payloadHash << std::endl;
+    // Canonical headers string creation
     Aws::StringStream headersStream;
-    Aws::StringStream signedHeadersStream;
-
-    for (const auto& header : request.GetHeaders())
-    {
-        headersStream << header.first << ":" << header.second << NEWLINE;
-        signedHeadersStream << header.first << ";";
-    }
+    headersStream << Aws::Http::HttpMethodMapper::GetNameForHttpMethod(request.GetMethod()) << NEWLINE;
+    //    headersStream << payloadHash << NEWLINE; // payload md5
+    headersStream << NEWLINE; // payload md5
+    if (request.HasHeader(Http::CONTENT_TYPE_HEADER))
+      headersStream << request.GetContentType();
+    headersStream << NEWLINE; // Content type line
+    headersStream << dateHeaderValue <<  NEWLINE;// Date line
 
     Aws::String canonicalHeadersString = headersStream.str();
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Canonical Header String: " << canonicalHeadersString);
-
     //calculate signed headers parameter
-    Aws::String signedHeadersValue = signedHeadersStream.str();
     //remove that last semi-colon
-    signedHeadersValue.erase(signedHeadersValue.length() - 1);
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Signed Headers value:" << signedHeadersValue);
 
-    //generate generalized canonicalized request string.
-    Aws::String canonicalRequestString = CanonicalizeRequestSigningString(request);
 
-    //append v4 stuff to the canonical request string.
-    canonicalRequestString.append(canonicalHeadersString);
-    canonicalRequestString.append(NEWLINE);
-    canonicalRequestString.append(signedHeadersValue);
-    canonicalRequestString.append(NEWLINE);
-    canonicalRequestString.append(payloadHash);
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Canonical Request String: " << canonicalRequestString);
+    // Compute CanonicalExtensionHeaders
+    Aws::String canonicalExtensionHeaders = CanonicalExtensionHeaders(request);
+    // Compute CanonicalResource
+    Aws::String canonicalResource = CanonicalResource(request);
+    Aws::String messageToSign = canonicalHeadersString + canonicalExtensionHeaders + canonicalResource;
+    std::cout << "########### Google Message to sign: " << NEWLINE << messageToSign << "\n###############" << std::endl;
+
 
     //now compute sha256 on that request string
-    auto hashResult = m_hash->Calculate(canonicalRequestString);
+    auto hashResult = m_hash->Calculate(messageToSign);
     if (!hashResult.IsSuccess())
     {
-        AWS_LOGSTREAM_ERROR(v4LogTag, "Failed to hash (sha256) request string \"" << canonicalRequestString << "\"");
         return false;
     }
-
-    auto sha256Digest = hashResult.GetResult();
-    Aws::String cannonicalRequestHash = HashingUtils::HexEncode(sha256Digest);
     Aws::String simpleDate = DateTime::CalculateGmtTimestampAsString(SIMPLE_DATE_FORMAT_STR);
-
-    Aws::String stringToSign = GenerateStringToSign(dateHeaderValue, simpleDate, cannonicalRequestHash);
-    auto finalSignature = GenerateSignature(credentials, stringToSign, simpleDate);
-
+    auto finalSignature = GenerateSignature(credentials, messageToSign, simpleDate);
     Aws::StringStream ss;
-    ss << AWS_HMAC_SHA256 << " " << CREDENTIAL << EQ << credentials.GetAWSAccessKeyId() << "/" << simpleDate
-        << "/" << m_region << "/" << m_serviceName << "/" << AWS4_REQUEST << ", " << SIGNED_HEADERS << EQ
-        << signedHeadersValue << ", " << SIGNATURE << EQ << finalSignature;
-
+    ss << AWS_HMAC_SHA256 << " " << credentials.GetAWSAccessKeyId() << ":" << finalSignature;
     auto awsAuthString = ss.str();
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Signing request with: " << awsAuthString);
-    request.SetAwsAuthorization(awsAuthString);
 
+    std::cout << "############### Signing request with: " << awsAuthString << std::endl;
+    request.SetAwsAuthorization(awsAuthString);
     return true;
+}
+
+Aws::String AWSAuthV4Signer::CanonicalResource(Aws::Http::HttpRequest& request) const { 
+  Aws::StringStream cr;
+  cr << request.GetUri().GetPath();
+  return cr.str();
+}
+
+
+Aws::String AWSAuthV4Signer::CanonicalExtensionHeaders(Aws::Http::HttpRequest& request) const { 
+  Aws::StringStream ceh;
+  HeaderValueCollection headers = request.GetHeaders();
+  std::vector<std::pair<std::string, std::string> > extH;
+  for (auto h : headers) {
+    if (!h.first.compare(0, 6, "x-amz-")) {
+      std::string headerName = h.first;
+      std::transform(headerName.begin(), headerName.end(), headerName.begin(), ::tolower);
+      extH.push_back(std::make_pair(headerName, h.second));
+    }
+  }
+  // TODO Sort headers according to their name
+
+  // TODO replace duplicate header names by creating one header name with a comma-separated list of values. Be sure there is no whitespace between the values and be sure that the order of the comma-separated list matches the order that the headers appear in your reques 
+  
+  // TODO Remove any whitespace around the colon that appears after the header name.
+  for (auto h : extH) {
+    ceh << h.first << ":" << h.second << NEWLINE;
+  }
+  return ceh.str();
 }
 
 bool AWSAuthV4Signer::PresignRequest(Aws::Http::HttpRequest& request, long long expirationTimeInSeconds) const
 {
+  std::cout <<  "--> presigning request" << std::endl;
     AWSCredentials credentials = m_credentialsProvider->GetAWSCredentials();
 
     //don't sign anonymous requests
@@ -202,7 +223,7 @@ bool AWSAuthV4Signer::PresignRequest(Aws::Http::HttpRequest& request, long long 
 
     //calculate date header to use in internal signature (this also goes into date header).
     Aws::String dateQueryValue = DateTime::CalculateGmtTimestampAsString(LONG_DATE_FORMAT_STR);
-    request.AddQueryStringParameter(Http::AWS_DATE_HEADER, dateQueryValue);
+    //    request.AddQueryStringParameter(Http::AWS_DATE_HEADER, dateQueryValue);
 
     Aws::StringStream ss;
     ss << Http::HOST_HEADER << ":" << request.GetHeaderValue(Http::HOST_HEADER) << NEWLINE;
@@ -263,79 +284,46 @@ bool AWSAuthV4Signer::PresignRequest(Aws::Http::HttpRequest& request, long long 
 
 Aws::String AWSAuthV4Signer::GenerateSignature(const AWSCredentials& credentials, const Aws::String& stringToSign, const Aws::String& simpleDate) const
 {
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Final String to sign: " << stringToSign);
+  std::cout << "---> Final String to sign: " << stringToSign << std::endl;
 
     Aws::StringStream ss;
-
-    //now we do the complicated part of deriving a signing key.
-    Aws::String signingKey(SIGNING_KEY);
-    signingKey.append(credentials.GetAWSSecretKey());
-
-    //we use digest only for the derivation process.
-    auto hashResult = m_HMAC->Calculate(ByteBuffer((unsigned char*)simpleDate.c_str(), simpleDate.length()),
-        ByteBuffer((unsigned char*)signingKey.c_str(), signingKey.length()));
+    Aws::String signingKey(credentials.GetAWSSecretKey());
+    ByteBuffer signingKeyBin = HashingUtils::Base64Decode(signingKey);
+    std::cout << "---> SigningKey: " << signingKey << std::endl;
+    //  std::cout << "---> SigningKey Bin Len: " << signingKeyBin.GetLength() << std::endl;
+    // signingKey = "key";
+    Aws::String message = stringToSign;
+    //message = "The quick brown fox jumps over the lazy dog";
+    auto hashResult = m_HMAC->Calculate(ByteBuffer((unsigned char*)message.c_str(), message.length()),
+					ByteBuffer((unsigned char*)signingKey.c_str(), signingKey.length())
+					//					signingKeyBin
+					);
     if (!hashResult.IsSuccess())
     {
-        AWS_LOGSTREAM_ERROR(v4LogTag, "Failed to hmac (sha256) date string \"" << simpleDate << "\"");
+        AWS_LOGSTREAM_ERROR(v4LogTag, "Failed to SHA1 hmac \"" << simpleDate << "\"");
         return "";
     }
-
-    auto kDate = hashResult.GetResult();
-    hashResult = m_HMAC->Calculate(ByteBuffer((unsigned char*)m_region.c_str(), m_region.length()), kDate);
-    if (!hashResult.IsSuccess())
-    {
-        AWS_LOGSTREAM_ERROR(v4LogTag, "Failed to hmac (sha256) region string \"" << m_region << "\"");
-        return "";
-    }
-
-    auto kRegion = hashResult.GetResult();
-    hashResult = m_HMAC->Calculate(ByteBuffer((unsigned char*)m_serviceName.c_str(), m_serviceName.length()), kRegion);
-    if (!hashResult.IsSuccess())
-    {
-        AWS_LOGSTREAM_ERROR(v4LogTag, "Failed to hmac (sha256) service string \"" << m_serviceName << "\"");
-        return "";
-    }
-
-    auto kService = hashResult.GetResult();
-    hashResult = m_HMAC->Calculate(ByteBuffer((unsigned char*)AWS4_REQUEST, strlen(AWS4_REQUEST)), kService);
-    if (!hashResult.IsSuccess())
-    {
-        AWS_LOGSTREAM_ERROR(v4LogTag, "Unable to hmac (sha256) request string \"" << AWS4_REQUEST << "\"");
-        return "";
-    }
-
-    auto kSigning = hashResult.GetResult();
-    hashResult = m_HMAC->Calculate(ByteBuffer((unsigned char*)stringToSign.c_str(), stringToSign.length()), kSigning);
-    if (!hashResult.IsSuccess())
-    {
-        AWS_LOGSTREAM_ERROR(v4LogTag, "Unable to hmac (sha256) final string \"" << stringToSign << "\"");
-        return "";
-    }
-
-    //now we finally sign our request string with our hex encoded derived hash.
     auto finalSigningDigest = hashResult.GetResult();
-
-    auto finalSigningHash = HashingUtils::HexEncode(finalSigningDigest);
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Final computed signing hash: " << finalSigningHash);
-
+    auto finalSigningHash = HashingUtils::Base64Encode(finalSigningDigest);
+    std::cout << "Hash in hex: " << HashingUtils::HexEncode(finalSigningDigest) << std::endl;;
     return finalSigningHash;
 }
 
 Aws::String AWSAuthV4Signer::ComputePayloadHash(Aws::Http::HttpRequest& request) const
 {
     //compute hash on payload if it exists.
-    auto hashResult = request.GetContentBody() ? m_hash->Calculate(*request.GetContentBody())
+    auto hashResult = request.GetContentBody() ? m_hashMD5->Calculate(*request.GetContentBody())
         : m_hash->Calculate("");
     if (!hashResult.IsSuccess())
     {
-        AWS_LOG_ERROR(v4LogTag, "Unable to hash (sha256) request body");
+        AWS_LOG_ERROR(v4LogTag, "Unable to hash (md5) request body");
         return "";
     }
 
     auto sha256Digest = hashResult.GetResult();
 
     Aws::String payloadHash(HashingUtils::HexEncode(sha256Digest));
-    AWS_LOGSTREAM_DEBUG(v4LogTag, "Calculated sha256 " << payloadHash << " for payload.");
+    std::cout << "Calculated md5 " << payloadHash << " for payload." << std::endl;
     return payloadHash;
 }
 

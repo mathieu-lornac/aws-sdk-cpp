@@ -108,14 +108,15 @@ HashResult Sha256OpenSSLImpl::Calculate(Aws::IStream& stream)
 
 HashResult Sha256HMACOpenSSLImpl::Calculate(const ByteBuffer& toSign, const ByteBuffer& secret)
 {
-    unsigned int length = SHA256_DIGEST_LENGTH;
+  std::cout << "Sha256HMACOpenSSLImpl::Calculate" << std::endl;
+  unsigned int length = 20;//SHA_DIGEST_LENGTH;
     ByteBuffer digest(length);
     memset(digest.GetUnderlyingData(), 0, length);
 
     HMAC_CTX ctx;
     HMAC_CTX_init(&ctx);
 
-    HMAC_Init_ex(&ctx, secret.GetUnderlyingData(), secret.GetLength(), EVP_sha256(), NULL);
+    HMAC_Init_ex(&ctx, secret.GetUnderlyingData(), secret.GetLength(), EVP_sha1(), NULL);
     HMAC_Update(&ctx, toSign.GetUnderlyingData(), toSign.GetLength());
     HMAC_Final(&ctx, digest.GetUnderlyingData(), &length);
     HMAC_CTX_cleanup(&ctx);

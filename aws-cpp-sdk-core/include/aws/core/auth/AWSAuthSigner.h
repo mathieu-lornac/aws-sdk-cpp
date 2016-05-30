@@ -35,6 +35,7 @@ namespace Aws
         namespace Crypto
         {
             class Sha256;
+            class MD5;
             class Sha256HMAC;
         } // namespace Crypto
     } // namespace Utils
@@ -103,13 +104,17 @@ namespace Aws
             Aws::String GenerateSignature(const Aws::Auth::AWSCredentials& credentials, const Aws::String& stringToSign, const Aws::String& simpleDate) const;
             Aws::String ComputePayloadHash(Aws::Http::HttpRequest&) const;
             Aws::String GenerateStringToSign(const Aws::String& dateValue, const Aws::String& simpleDate, const Aws::String& canonicalRequestHash) const;
-
+            Aws::String CanonicalExtensionHeaders(Aws::Http::HttpRequest&) const;
+	    Aws::String CanonicalResource(Aws::Http::HttpRequest& request) const;
             std::shared_ptr<Auth::AWSCredentialsProvider> m_credentialsProvider;
             Aws::String m_serviceName;
             Aws::String m_region;
             Aws::UniquePtr<Aws::Utils::Crypto::Sha256> m_hash;
+            Aws::UniquePtr<Aws::Utils::Crypto::MD5> m_hashMD5;
             Aws::UniquePtr<Aws::Utils::Crypto::Sha256HMAC> m_HMAC;
         };
+
+
 
     } // namespace Client
 } // namespace Aws
