@@ -39,6 +39,21 @@ HashResult Sha256HMAC::Calculate(const Aws::Utils::ByteBuffer& toSign, const Aws
     return m_hmacImpl->Calculate(toSign, secret);
 }
 
+
+Sha1HMAC::Sha1HMAC() : 
+    m_hmacImpl(CreateSha1HMACImplementation())
+{
+}
+
+Sha1HMAC::~Sha1HMAC()
+{
+}
+
+HashResult Sha1HMAC::Calculate(const Aws::Utils::ByteBuffer& toSign, const Aws::Utils::ByteBuffer& secret)
+{
+    return m_hmacImpl->Calculate(toSign, secret);
+}
+
 } // namespace Crypto
 } // namespace Utils
 } // namespace Aws

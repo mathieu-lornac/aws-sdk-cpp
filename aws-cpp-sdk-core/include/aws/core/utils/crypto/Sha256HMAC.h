@@ -63,7 +63,30 @@ namespace Aws
                 std::shared_ptr< HMAC > m_hmacImpl;
             };
 
-        } // namespace Sha256
+            /**
+             * Sha1 HMAC implementation
+             */
+            class AWS_CORE_API Sha1HMAC : public HMAC
+            {
+            public:
+                /**
+                 * initializes platform specific libs.
+                 */
+                Sha1HMAC();
+                virtual ~Sha1HMAC();
+
+                /**
+                * Calculates a SHA1 HMAC digest (not hex encoded)
+                */
+                virtual HashResult Calculate(const Aws::Utils::ByteBuffer& toSign,
+                                             const Aws::Utils::ByteBuffer& secret) override;
+
+            private:
+
+                std::shared_ptr< HMAC > m_hmacImpl;
+            };
+
+        } // namespace Crypto
     } // namespace Utils
 } // namespace Aws
 

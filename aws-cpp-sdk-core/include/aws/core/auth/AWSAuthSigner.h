@@ -35,6 +35,7 @@ namespace Aws
         namespace Crypto
         {
             class Sha256;
+            class Sha1HMAC;
             class Sha256HMAC;
         } // namespace Crypto
     } // namespace Utils
@@ -110,6 +111,49 @@ namespace Aws
             Aws::UniquePtr<Aws::Utils::Crypto::Sha256> m_hash;
             Aws::UniquePtr<Aws::Utils::Crypto::Sha256HMAC> m_HMAC;
         };
+
+
+        /**
+         * Google storage implementation of the AWSAuthSigner interface. More information on Google storage signing can be found here:
+	 * https://cloud.google.com/storage/docs/migrating?hl=en_US#authentication
+         */
+        class AWS_CORE_API GoogleAuthSigner : public AWSAuthSigner
+        {
+
+        public:
+            /**
+            * Take credentials provider and uses it for authentication. This constructor
+            * is ideal for special credentials providers such as cognito-identity.
+            */
+            GoogleAuthSigner(const std::shared_ptr<Auth::AWSCredentialsProvider>& credentialsProvider,
+			     const char* serviceName, const Aws::String& region);
+
+            virtual ~GoogleAuthSigner();
+
+            /**
+            * Signs the request itself based on info in the request and uri.
+            * Uses Google cloud storage signing method with SHA1 HMAC algorithm.
+            */
+            bool SignRequest(Aws::Http::HttpRequest& request) const override;
+
+            /**
+            * Not implemented for now
+            */
+            bool PresignRequest(Aws::Http::HttpRequest& request, long long expirationInSeconds = 0) const override;
+
+        private:
+            Aws::String GenerateSignature(const Aws::Auth::AWSCredentials& credentials, const Aws::String& stringToSign) const;
+
+            std::shared_ptr<Auth::AWSCredentialsProvider> m_credentialsProvider;
+            Aws::String m_serviceName;
+            Aws::String m_region;
+            Aws::UniquePtr<Aws::Utils::Crypto::Sha1HMAC> m_HMAC;
+            Aws::String CanonicalHeaders(Aws::Http::HttpRequest&, const Aws::String &date) const;
+            Aws::String CanonicalExtensionHeaders(Aws::Http::HttpRequest&) const;
+            Aws::String CanonicalResource(Aws::Http::HttpRequest& request) const;
+        };
+
+
 
     } // namespace Client
 } // namespace Aws

@@ -31,6 +31,7 @@ static const char *s_allocationTag = "CryptoFactory";
 
 static std::shared_ptr<HashFactory> s_MD5Factory(nullptr);
 static std::shared_ptr<HashFactory> s_Sha256Factory(nullptr);
+static std::shared_ptr<HMACFactory> s_Sha1HMACFactory(nullptr);
 static std::shared_ptr<HMACFactory> s_Sha256HMACFactory(nullptr);
 
 void Aws::Utils::Crypto::SetMD5Factory(const std::shared_ptr<HashFactory>& factory)
@@ -97,6 +98,20 @@ std::shared_ptr<HMAC> Aws::Utils::Crypto::CreateSha256HMACImplementation()
     return Aws::MakeShared<Sha256HMACOpenSSLImpl>(s_allocationTag);
 #elif ENABLE_COMMONCRYPTO_ENCRYPTION
     return Aws::MakeShared<Sha256HMACCommonCryptoImpl>(s_allocationTag);
+#else
+    return nullptr;
+#endif
+}
+
+std::shared_ptr<HMAC> Aws::Utils::Crypto::CreateSha1HMACImplementation()
+{
+    if(s_Sha1HMACFactory)
+    {
+        return s_Sha1HMACFactory->CreateImplementation();
+    }
+
+#if ENABLE_OPENSSL_ENCRYPTION
+    return Aws::MakeShared<Sha1HMACOpenSSLImpl>(s_allocationTag);
 #else
     return nullptr;
 #endif

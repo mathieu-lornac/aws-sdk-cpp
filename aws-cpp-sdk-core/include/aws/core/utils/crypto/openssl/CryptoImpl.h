@@ -47,6 +47,17 @@ namespace Aws
 
             };
 
+            class Sha1HMACOpenSSLImpl : public HMAC
+            {
+            public:
+
+                Sha1HMACOpenSSLImpl() {}
+                virtual ~Sha1HMACOpenSSLImpl() {}
+
+                virtual HashResult Calculate(const ByteBuffer& toSign, const ByteBuffer& secret) override;
+
+            };
+
         } // namespace Crypto
     } // namespace Utils
 } // namespace Aws

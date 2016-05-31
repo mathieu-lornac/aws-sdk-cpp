@@ -41,6 +41,10 @@ namespace Aws
              * Create a Sha256 HMACHash provider
              */
             AWS_CORE_API std::shared_ptr<HMAC> CreateSha256HMACImplementation();
+            /**
+             * Create a Sha1 HMACHash provider
+             */
+            AWS_CORE_API std::shared_ptr<HMAC> CreateSha1HMACImplementation();
 
             /**
              * Set the global factory for MD5 Hash providers
