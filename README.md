@@ -43,7 +43,7 @@ Once this library installed to your system, link as usual to it.
 ## Google cloud project
 
 You must enable the interoperability API of Cloud Storage. This interoperability lets you use HMAC authentication and enables a S3 like access on your project.
-In order to access it:
+In order to activate it:
 * Open **console.cloud.google.com**
 * Click **Products & services** (The burger in the top left corner)
 * Select **Storage**
