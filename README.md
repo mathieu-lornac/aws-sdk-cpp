@@ -1,3 +1,89 @@
+#Brief
+
+Google does not provide a C++ driver to interact with **Cloud Storage**. 
+This project is a modification of the s3 driver to connect to **Google Cloud Storage**.
+
+#Support
+
+For now, the driver only connects to Google Cloud Storage.
+Compatibility with both S3 and Cloud Storage should be achieved quickly.
+
+
+The following operations are currently supported and tested:
+* Download of an object
+* Delete of an object 
+* Put of an object
+* List objects of a bucket
+ 
+#Setup
+*Clone this repository
+*Checkout the branch gcc
+
+##Compilation and installation
+
+The requirements are the same as the Amazon aws-sdk-cpp.
+
+To compile:
+```
+mkdir build; cd build
+cmake -DCUSTOM_MEMORY_MANAGEMENT=0 ..# If you want to disable amazon's custom allocator
+make aws-cpp-sdk-s3
+```
+
+To install S3 and it's deps:
+```
+# In your build folder
+cd aws-cpp-sdk-s3;
+sudo make install
+cd aws-cpp-sdk-core;
+sudo make install
+```
+Once this library installed to your system, link as usual to it.
+ 
+## Google cloud project
+
+You must enable the interoperability API of Cloud Storage. This interoperability lets you use HMAC authentication and enables a S3 like access on your project.
+In order to access it:
+*Open **console.cloud.google.com**
+*Click **Products & services** (The burger in the top left corner)
+*Select **Storage**
+*Click **Settings**
+*Select the tab **Interoperability**
+*Click create a new key
+
+The key you created is composed of an **access key** and a **secret key**.
+To authenticate with the S3 driver, use them as following: 
+```
+Aws::Auth::AWSCredentials credentials(accessKey, secretKey); 
+``` 
+
+#How to use it
+
+##Creation of a S3Client instance
+```
+  Aws::Auth::AWSCredentials credentials(accessKey, secretKey);
+  Aws::Client::ClientConfiguration clientConfiguration;
+  clientConfiguration.scheme = Aws::Http::Scheme::HTTPS;
+  clientConfiguration.region = Aws::Region::GOOGLE_CLOUD_STORAGE;
+  clientConfiguration.requestTimeoutMs = 3600000; // Your request timeout
+  S3Client client(credentials, clientConfiguration);
+```
+
+##Download of an object
+```
+void get_object(S3Client *client, const std::string &bucket, const std::string &objectName) {
+  Model::GetObjectRequest dlRequest;
+  dlRequest.SetBucket(bucket);
+  dlRequest.SetKey(objectName);
+  Model::GetObjectOutcome oc = client->GetObject(dlRequest);
+  if (!oc.IsSuccess())
+    return;
+  std::cout << "Content length: " <<  oc.GetResult().GetContentLength() << std::endl;
+  std::stringstream ss;
+  ss << oc.GetResult().GetBody().rdbuf();
+  std::cout << "Content: " << ss.str() << std::endl;
+}
+```
 
 # aws-sdk-cpp
 The AWS SDK for C++ provides a modern C++ (version C++ 11 or later) interface for Amazon Web Services (AWS). It is meant to be performant and fully functioning with low- and high-level SDKs, while minimizing dependencies and providing platform portability (Windows, OSX, Linux, and mobile).  
