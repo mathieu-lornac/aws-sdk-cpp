@@ -16,8 +16,8 @@ The following operations are currently supported and tested:
 * List objects of a bucket
  
 #Setup
-*Clone this repository
-*Checkout the branch gcc
+* Clone this repository
+* Checkout the branch gcc
 
 ##Compilation and installation
 
@@ -44,12 +44,12 @@ Once this library installed to your system, link as usual to it.
 
 You must enable the interoperability API of Cloud Storage. This interoperability lets you use HMAC authentication and enables a S3 like access on your project.
 In order to access it:
-*Open **console.cloud.google.com**
-*Click **Products & services** (The burger in the top left corner)
-*Select **Storage**
-*Click **Settings**
-*Select the tab **Interoperability**
-*Click create a new key
+* Open **console.cloud.google.com**
+* Click **Products & services** (The burger in the top left corner)
+* Select **Storage**
+* Click **Settings**
+* Select the tab **Interoperability**
+* Click create a new key
 
 The key you created is composed of an **access key** and a **secret key**.
 To authenticate with the S3 driver, use them as following: 
